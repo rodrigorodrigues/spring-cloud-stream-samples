@@ -9,5 +9,5 @@ Go to the root of the repository and do:
 
 `./mvnw clean package`
 
-`java -jar target/kafka-simple-consumer-0.0.1-SNAPSHOT.jar
+`java -jar target/kafka-simple-consumer-0.0.1-SNAPSHOT.jar`
 
