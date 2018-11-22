@@ -70,4 +70,5 @@ On another terminal:
 
 Enter text ("English", "French", "Spanish" - case doesn't matter) in the console producer and watch the output in the respective console consumer.
 The word "english" goes to topic `english-counts`, "french" goes to topic `french-counts` and "spanish" goes to `spanish-counts`.
-Any other text goes to `unknown-word`.
+
+Any other text goes to topic `unknown-word`.
