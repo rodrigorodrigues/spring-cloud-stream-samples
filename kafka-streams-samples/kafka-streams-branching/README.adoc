@@ -9,7 +9,22 @@ This sample uses lambda expressions and thus requires Java 8+.
 
 By default native decoding and encoding are disabled and this means that any deserializaion on inbound and serialization on outbound is performed by the Binder using the configured content types.
 
-=== Running the app:
+=== Added new topic
+
+It was added a new topic `unknown-word` for different words than `French, English and Spanish`.
+
+=== Disabled Spring Auto Create Topics
+```
+spring:
+  cloud:
+    stream:
+      kafka:
+        streams:
+          binder:
+            auto-create-topics: false
+```
+
+=== Running the app using Confluentinc:3.0.0
 
 Go to the root of the repository and do:
 
@@ -18,6 +33,20 @@ Go to the root of the repository and do:
 `./mvnw clean package`
 
 `java -jar target/kafka-streams-branching-0.0.1-SNAPSHOT.jar --spring.cloud.stream.kafka.streams.timeWindow.length=60000`
+
+Create the topics:
+
+```
+docker exec -it kafka-branch kafka-topics --create --zookeeper 127.0.0.1:2181 --replication-factor 1 --partitions 1 --topic words
+
+docker exec -it kafka-branch kafka-topics --create --zookeeper 127.0.0.1:2181 --replication-factor 1 --partitions 1 --topic english-counts
+
+docker exec -it kafka-branch kafka-topics --create --zookeeper 127.0.0.1:2181 --replication-factor 1 --partitions 1 --topic french-counts
+
+docker exec -it kafka-branch kafka-topics --create --zookeeper 127.0.0.1:2181 --replication-factor 1 --partitions 1 --topic spanish-counts
+
+docker exec -it kafka-branch kafka-topics --create --zookeeper 127.0.0.1:2181 --replication-factor 1 --partitions 1 --topic unknown-word
+```
 
 Issue the following commands:
 
@@ -35,5 +64,10 @@ On another terminal:
 
 `docker exec -it kafka-branch /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic spanish-counts`
 
+On another terminal:
+
+`docker exec -it kafka-branch /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic unknown-word`
+
 Enter text ("English", "French", "Spanish" - case doesn't matter) in the console producer and watch the output in the respective console consumer.
-The word "english" goes to topic english-counts, "french" goes to topic french-counts and "spanish" goes to spanish-counts.
+The word "english" goes to topic `english-counts`, "french" goes to topic `french-counts` and "spanish" goes to `spanish-counts`.
+Any other text goes to `unknown-word`.
