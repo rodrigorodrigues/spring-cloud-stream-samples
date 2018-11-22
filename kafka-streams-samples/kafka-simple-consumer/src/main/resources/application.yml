@@ -1,0 +1,13 @@
+spring.cloud.stream.bindings.input.contentType: application/json
+spring.cloud.stream.kafka.streams.binder.configuration.commit.interval.ms: 1000
+spring.cloud.stream.bindings.input:
+  binder: kafka
+  destination: unknown-word
+  producer:
+    headerMode: raw
+spring:
+  cloud:
+    stream:
+      kafka:
+        binder:
+          auto-create-topics: false

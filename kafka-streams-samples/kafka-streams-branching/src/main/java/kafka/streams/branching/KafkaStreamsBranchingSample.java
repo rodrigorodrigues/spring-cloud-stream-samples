@@ -21,6 +21,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -28,6 +30,7 @@ import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.cloud.stream.annotation.Output;
 import org.springframework.cloud.stream.annotation.StreamListener;
+import org.springframework.messaging.SubscribableChannel;
 import org.springframework.messaging.handler.annotation.SendTo;
 
 import java.util.Arrays;
@@ -35,6 +38,8 @@ import java.util.Date;
 
 @SpringBootApplication
 public class KafkaStreamsBranchingSample {
+
+	private static final Logger logger = LoggerFactory.getLogger(KafkaStreamsBranchingSample.class);
 
 	public static void main(String[] args) {
 		SpringApplication.run(KafkaStreamsBranchingSample.class, args);
@@ -47,13 +52,20 @@ public class KafkaStreamsBranchingSample {
 		private TimeWindows timeWindows;
 
 		@StreamListener("input")
-		@SendTo({"output1","output2","output3"})
+		@SendTo({"output1","output2","output3","output4"})
 		@SuppressWarnings("unchecked")
 		public KStream<?, WordCount>[] process(KStream<Object, String> input) {
 
-			Predicate<Object, WordCount> isEnglish = (k, v) -> v.word.equals("english");
+			Predicate<Object, WordCount> isEnglish = (k, v) -> {
+				boolean english = v.word.equals("english");
+				if (english) {
+					logger.info("Send message for English Topic");
+				}
+				return english;
+			};
 			Predicate<Object, WordCount> isFrench =  (k, v) -> v.word.equals("french");
 			Predicate<Object, WordCount> isSpanish = (k, v) -> v.word.equals("spanish");
+			Predicate<Object, WordCount> isUnknownWord = (k, v) -> !(isEnglish.test(k, v) && isSpanish.test(k, v) && isFrench.test(k, v));
 
 			return input
 					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
@@ -62,9 +74,16 @@ public class KafkaStreamsBranchingSample {
 					.count(Materialized.as("WordCounts-1"))
 					.toStream()
 					.map((key, value) -> new KeyValue<>(null, new WordCount(key.key(), value, new Date(key.window().start()), new Date(key.window().end()))))
-					.branch(isEnglish, isFrench, isSpanish);
+					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);
 		}
+
 	}
+
+	@StreamListener("input4")
+	public void unknownWords(String input) {
+		logger.info("unknownWords: {}", input);
+	}
+
 
 	interface KStreamProcessorX {
 
@@ -79,6 +98,12 @@ public class KafkaStreamsBranchingSample {
 
 		@Output("output3")
 		KStream<?, ?> output3();
+
+		@Output("output4")
+		KStream output4();
+
+		@Input("input4")
+		SubscribableChannel input4();
 	}
 
 	static class WordCount {
