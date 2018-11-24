@@ -28,7 +28,7 @@ spring:
 
 Go to the root of the repository and do:
 
-`docker-compose up -d`
+`docker-compose -f docker-compose-confluentinc.yml up -d`
 
 `./mvnw clean package`
 
