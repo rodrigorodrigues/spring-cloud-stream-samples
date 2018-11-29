@@ -16,13 +16,10 @@
 
 package kafka.streams.branching;
 
+import lombok.*;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.TimeWindows;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.streams.kstream.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -35,15 +32,27 @@ import org.springframework.messaging.handler.annotation.SendTo;
 
 import java.util.Arrays;
 import java.util.Date;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
+@Slf4j
 @SpringBootApplication
 public class KafkaStreamsBranchingSample {
-
-	private static final Logger logger = LoggerFactory.getLogger(KafkaStreamsBranchingSample.class);
 
 	public static void main(String[] args) {
 		SpringApplication.run(KafkaStreamsBranchingSample.class, args);
 	}
+
+	private static final Predicate<Object, WordCount> isEnglish = (k, v) -> {
+		boolean english = v.word.equals("english");
+		if (english) {
+			log.info("Send message for English Topic");
+		}
+		return english;
+	};
+	private static final Predicate<Object, WordCount> isFrench =  (k, v) -> v.word.equals("french");
+	private static final Predicate<Object, WordCount> isSpanish = (k, v) -> v.word.equals("spanish");
+	private static final Predicate<Object, WordCount> isUnknownWord = (k, v) -> !(isEnglish.test(k, v) && isSpanish.test(k, v) && isFrench.test(k, v));
 
 	@EnableBinding(KStreamProcessorX.class)
 	public static class WordCountProcessorApplication {
@@ -55,18 +64,6 @@ public class KafkaStreamsBranchingSample {
 		@SendTo({"output1","output2","output3","output4"})
 		@SuppressWarnings("unchecked")
 		public KStream<?, WordCount>[] process(KStream<Object, String> input) {
-
-			Predicate<Object, WordCount> isEnglish = (k, v) -> {
-				boolean english = v.word.equals("english");
-				if (english) {
-					logger.info("Send message for English Topic");
-				}
-				return english;
-			};
-			Predicate<Object, WordCount> isFrench =  (k, v) -> v.word.equals("french");
-			Predicate<Object, WordCount> isSpanish = (k, v) -> v.word.equals("spanish");
-			Predicate<Object, WordCount> isUnknownWord = (k, v) -> !(isEnglish.test(k, v) && isSpanish.test(k, v) && isFrench.test(k, v));
-
 			return input
 					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 					.groupBy((key, value) -> value)
@@ -77,18 +74,60 @@ public class KafkaStreamsBranchingSample {
 					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);
 		}
 
+		@StreamListener("inputAggregation")
+		@SuppressWarnings("unchecked")
+		public void processAggregation(KStream<Object, String> input) {
+			//input.foreach((k, v) -> System.out.println("printing..." + v));
+			KStream<Windowed<String>, WordCount>[] streams = input
+					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+					.groupBy((key, value) -> value)
+					.windowedBy(timeWindows)
+					.aggregate(WordAggregate::new, (key, value, aggregate) -> {
+						if (isFrench.test(key, new WordCount(value))) {
+							aggregate = createWordAggregate(aggregate, WordType.FRENCH);
+						} else if (isSpanish.test(key, new WordCount(value))) {
+							aggregate = createWordAggregate(aggregate, WordType.SPANISH);
+						} else if (isEnglish.test(key, new WordCount(value))) {
+							aggregate = createWordAggregate(aggregate, WordType.ENGLISH);
+						} else {
+							aggregate = createWordAggregate(aggregate, WordType.UNKNOWN);
+						}
+						aggregate.increment();
+						return aggregate;
+					})
+					.mapValues(value -> new WordCount(value.getWordType().name(), value.getCount()))
+					.toStream()
+					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);
+
+			Stream.of(streams)
+					.forEach(s -> {
+						s.filter(isEnglish).to("output1");
+						s.filter(isFrench).to("output2");
+						s.filter(isSpanish).to("output3");
+						s.filter(isUnknownWord).to("output4");
+					});
+		}
+
+		private WordAggregate createWordAggregate(WordAggregate wordAggregate, WordType wordType) {
+			if (wordAggregate.getWordType() != wordType) {
+				wordAggregate = new WordAggregate(wordType);
+			}
+			return wordAggregate;
+		}
 	}
 
 	@StreamListener("input4")
 	public void unknownWords(String input) {
-		logger.info("unknownWords: {}", input);
+		log.info("unknownWords: {}", input);
 	}
-
 
 	interface KStreamProcessorX {
 
 		@Input("input")
 		KStream<?, ?> input();
+
+		@Input("inputAggregation")
+		KStream<?, ?> inputAggregation();
 
 		@Output("output1")
 		KStream<?, ?> output1();
@@ -106,6 +145,33 @@ public class KafkaStreamsBranchingSample {
 		SubscribableChannel input4();
 	}
 
+	enum WordType {
+		FRENCH,
+		ENGLISH,
+		SPANISH,
+		UNKNOWN;
+	}
+
+	@NoArgsConstructor
+	@RequiredArgsConstructor
+	static class WordAggregate {
+
+		@NonNull
+		@Setter
+		@Getter
+		private WordType wordType;
+
+		private AtomicLong counter = new AtomicLong();
+
+		public void increment() {
+			counter.incrementAndGet();
+		}
+
+		public Long getCount() {
+			return counter.get();
+		}
+	}
+
 	static class WordCount {
 
 		private String word;
@@ -115,6 +181,15 @@ public class KafkaStreamsBranchingSample {
 		private Date start;
 
 		private Date end;
+
+		WordCount(String word) {
+			this.word = word;
+		}
+
+		WordCount(String word, long count) {
+			this(word);
+			this.count = count;
+		}
 
 		WordCount(String word, long count, Date start, Date end) {
 			this.word = word;

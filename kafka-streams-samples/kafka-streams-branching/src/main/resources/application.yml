@@ -35,13 +35,19 @@ spring.cloud.stream.bindings.input4:
   group: group1
   consumer:
     headerMode: raw
+spring.cloud.stream.kafka.bindings.input:
+  consumer:
+    application.id: app-count-words
+#spring.cloud.stream.kafka.bindings.inputAggregation:
+#  consumer:
+#    application.id: app-count-words
+
 spring.cloud.stream.kafka.streams.binder:
-  brokers: localhost #192.168.99.100 #localhost
-  zkNodes: localhost #192.168.99.100 #localhost
+  brokers: ${BROKERS:localhost} #192.168.99.100 #localhost
+  zkNodes: ${ZKNODES:localhost} #192.168.99.100 #localhost
 spring:
-  cloud:
-    stream:
-      kafka:
-        streams:
-          binder:
-            auto-create-topics: false
+  kafka:
+    bootstrap-servers: ${BROKERS:localhost}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
