@@ -39,17 +39,13 @@ import static org.assertj.core.api.Java6Assertions.assertThat;
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
 		"spring.cloud.stream.kafka.streams.timeWindow.length=60000",
-		"logging.level.kafka.streams.branching=debug",
-		"spring.cloud.stream.bindings.inputAggregation.destination=aggregation-words",
-		"spring.cloud.stream.bindings.inputAggregation.group=group1",
-		"spring.cloud.stream.bindings.inputAggregation.consumer.headerMode=raw",
-		"spring.cloud.stream.kafka.bindings.inputAggregation.consumer.application-id=app-aggregation-words"
+		"logging.level.kafka.streams.branching=debug"
 })
 @DirtiesContext
 public class KafkaStreamsBranchingSampleTests {
 
 	@ClassRule
-	public static EmbeddedKafkaRule embeddedKafkaRule = new EmbeddedKafkaRule(1, false, 1, "english-counts", "french-counts",
+	public static EmbeddedKafkaRule embeddedKafkaRule = new EmbeddedKafkaRule(1, false, 2, "english-counts", "french-counts",
 			"spanish-counts", "unknown-word", "words");
 
 	@Autowired
@@ -86,7 +82,7 @@ public class KafkaStreamsBranchingSampleTests {
 
 	@Test
 	public void shouldTestAggregationWordsTopicWithKafkaStream() throws Exception {
-		kafkaTemplate.send("aggregation-words", "English Spanish Portuguese Test");
+		kafkaTemplate.send("words", "English Spanish Portuguese Test");
 
 		waitAssert(() -> assertThat(outputCapture.toString()).contains("Send message for English Topic"));
 		waitAssert(() -> assertThat(outputCapture.toString()).contains("unknownWords: {\"word\":\"portuguese,test\""));

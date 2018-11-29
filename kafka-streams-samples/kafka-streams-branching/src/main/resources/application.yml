@@ -29,6 +29,11 @@ spring.cloud.stream.bindings.input:
   group: group1
   consumer:
     headerMode: raw
+spring.cloud.stream.bindings.inputAggregation:
+  destination: aggregation-words
+  group: group1
+  consumer:
+    headerMode: raw
 spring.cloud.stream.bindings.input4:
   binder: kafka
   destination: unknown-word
@@ -38,9 +43,9 @@ spring.cloud.stream.bindings.input4:
 spring.cloud.stream.kafka.bindings.input:
   consumer:
     application.id: app-count-words
-#spring.cloud.stream.kafka.bindings.inputAggregation:
-#  consumer:
-#    application.id: app-count-words
+spring.cloud.stream.kafka.bindings.inputAggregation:
+  consumer:
+    application.id: app-aggregate-words
 
 spring.cloud.stream.kafka.streams.binder:
   brokers: ${BROKERS:localhost} #192.168.99.100 #localhost

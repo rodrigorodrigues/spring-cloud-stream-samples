@@ -33,7 +33,6 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Stream;
 
 @Slf4j
 @SpringBootApplication
@@ -62,7 +61,6 @@ public class KafkaStreamsBranchingSample {
 
 		@StreamListener("input")
 		@SendTo({"output1","output2","output3","output4"})
-		@SuppressWarnings("unchecked")
 		public KStream<?, WordCount>[] process(KStream<Object, String> input) {
 			return input
 					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
@@ -74,38 +72,33 @@ public class KafkaStreamsBranchingSample {
 					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);
 		}
 
-		@StreamListener("inputAggregation")
-		@SuppressWarnings("unchecked")
+		//@StreamListener("inputAggregation")
 		public void processAggregation(KStream<Object, String> input) {
-			//input.foreach((k, v) -> System.out.println("printing..." + v));
-			KStream<Windowed<String>, WordCount>[] streams = input
+			input
 					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 					.groupBy((key, value) -> value)
 					.windowedBy(timeWindows)
-					.aggregate(WordAggregate::new, (key, value, aggregate) -> {
-						if (isFrench.test(key, new WordCount(value))) {
-							aggregate = createWordAggregate(aggregate, WordType.FRENCH);
-						} else if (isSpanish.test(key, new WordCount(value))) {
-							aggregate = createWordAggregate(aggregate, WordType.SPANISH);
-						} else if (isEnglish.test(key, new WordCount(value))) {
-							aggregate = createWordAggregate(aggregate, WordType.ENGLISH);
-						} else {
-							aggregate = createWordAggregate(aggregate, WordType.UNKNOWN);
-						}
-						aggregate.increment();
-						return aggregate;
-					})
-					.mapValues(value -> new WordCount(value.getWordType().name(), value.getCount()))
-					.toStream()
-					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);
+					.aggregate(WordAggregate::new, aggregateValues())
+					.toStream((key, value) -> new WordCount(value.getWordType().name(), value.getCount()))
+					.filter(((key, value) -> isEnglish.test(value, key)))
+					.to("output1");
+		}
 
-			Stream.of(streams)
-					.forEach(s -> {
-						s.filter(isEnglish).to("output1");
-						s.filter(isFrench).to("output2");
-						s.filter(isSpanish).to("output3");
-						s.filter(isUnknownWord).to("output4");
-					});
+		private Aggregator<String, String, WordAggregate> aggregateValues() {
+			return (key, value, aggregate) -> {
+				if (isFrench.test(key, new WordCount(value))) {
+					aggregate = createWordAggregate(aggregate, WordType.FRENCH);
+				} else if (isSpanish.test(key, new WordCount(value))) {
+					aggregate = createWordAggregate(aggregate, WordType.SPANISH);
+				} else if (isEnglish.test(key, new WordCount(value))) {
+					aggregate = createWordAggregate(aggregate, WordType.ENGLISH);
+				} else {
+					aggregate = createWordAggregate(aggregate, WordType.UNKNOWN);
+				}
+				aggregate.increment();
+				log.debug("AggregateValues: {}", aggregate);
+				return aggregate;
+			};
 		}
 
 		private WordAggregate createWordAggregate(WordAggregate wordAggregate, WordType wordType) {
