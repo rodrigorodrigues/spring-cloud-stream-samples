@@ -18,6 +18,7 @@ package kafka.streams.branching;
 
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.cloud.stream.annotation.Output;
 import org.springframework.cloud.stream.annotation.StreamListener;
+import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.messaging.SubscribableChannel;
 import org.springframework.messaging.handler.annotation.SendTo;
 
@@ -66,23 +68,33 @@ public class KafkaStreamsBranchingSample {
 					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 					.groupBy((key, value) -> value)
 					.windowedBy(timeWindows)
+					.aggregate(WordAggregate::new, aggregateValues(), Materialized.with(Serdes.String(), new JsonSerde<>(WordAggregate.class)))
+					.toStream()
+					.map((key, value) -> new KeyValue<>(null, new WordCount(key.key(), value.getCount(), new Date(key.window().start()), new Date(key.window().end()))))
+					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);
+
+			/*return input
+					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+					.groupBy((key, value) -> value)
+					.windowedBy(timeWindows)
 					.count(Materialized.as("WordCounts-1"))
 					.toStream()
 					.map((key, value) -> new KeyValue<>(null, new WordCount(key.key(), value, new Date(key.window().start()), new Date(key.window().end()))))
-					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);
+					.branch(isEnglish, isFrench, isSpanish, isUnknownWord);*/
 		}
 
-		//@StreamListener("inputAggregation")
+		/*@StreamListener("inputAggregation")
 		public void processAggregation(KStream<Object, String> input) {
+			input.foreach((k, v) -> log.debug("Printing... {}, {}", k, v));
 			input
 					.flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
 					.groupBy((key, value) -> value)
 					.windowedBy(timeWindows)
-					.aggregate(WordAggregate::new, aggregateValues())
+					.aggregate(WordAggregate::new, aggregateValues(), Materialized.with(Serdes.String(), new JsonSerde<>(WordAggregate.class)))
 					.toStream((key, value) -> new WordCount(value.getWordType().name(), value.getCount()))
 					.filter(((key, value) -> isEnglish.test(value, key)))
 					.to("output1");
-		}
+		}*/
 
 		private Aggregator<String, String, WordAggregate> aggregateValues() {
 			return (key, value, aggregate) -> {

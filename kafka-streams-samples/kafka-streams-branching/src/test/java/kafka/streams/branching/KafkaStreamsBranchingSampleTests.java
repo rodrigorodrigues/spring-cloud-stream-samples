@@ -45,8 +45,8 @@ import static org.assertj.core.api.Java6Assertions.assertThat;
 public class KafkaStreamsBranchingSampleTests {
 
 	@ClassRule
-	public static EmbeddedKafkaRule embeddedKafkaRule = new EmbeddedKafkaRule(1, false, 2, "english-counts", "french-counts",
-			"spanish-counts", "unknown-word", "words");
+	public static EmbeddedKafkaRule embeddedKafkaRule = new EmbeddedKafkaRule(1, false, 1, "english-counts", "french-counts",
+			"spanish-counts", "unknown-word", "words", "aggregation-words");
 
 	@Autowired
 	private KafkaTemplate kafkaTemplate;
